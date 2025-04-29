@@ -1,0 +1,61 @@
+{
+    "Comment": "API Endpoint Discovery Workflow",
+    "StartAt": "ListAndCloneRepositories",
+    "States": {
+      "ListAndCloneRepositories": {
+        "Type": "Task",
+        "Resource": "${list_clone_arn}",
+        "ResultPath": "$.repositories",
+        "Next": "ProcessRepositories"
+      },
+      "ProcessRepositories": {
+        "Type": "Map",
+        "ItemsPath": "$.repositories",
+        "ResultPath": "$.processedRepositories",
+        "Parameters": {
+          "repository.$": "$$.Map.Item.Value",
+          "jobId.$": "$.jobId"
+        },
+        "MaxConcurrency": 10,
+        "Iterator": {
+          "StartAt": "DiscoverAndChunkFiles",
+          "States": {
+            "DiscoverAndChunkFiles": {
+              "Type": "Task",
+              "Resource": "${discover_and_chunk_arn}",
+              "ResultPath": "$.chunks",
+              "Next": "ProcessChunks"
+            },
+            "ProcessChunks": {
+              "Type": "Map",
+              "ItemsPath": "$.chunks",
+              "ResultPath": "$.processedChunks",
+              "Parameters": {
+                "chunk.$": "$$.Map.Item.Value",
+                "repository.$": "$.repository",
+                "jobId.$": "$.jobId"
+              },
+              "MaxConcurrency": 5,
+              "Iterator": {
+                "StartAt": "InvokeBedrock",
+                "States": {
+                  "InvokeBedrock": {
+                    "Type": "Task",
+                    "Resource": "${invoke_bedrock_arn}",
+                    "End": true
+                  }
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        "Next": "AggregateResults"
+      },
+      "AggregateResults": {
+        "Type": "Task",
+        "Resource": "${aggregate_arn}",
+        "End": true
+      }
+    }
+  }
